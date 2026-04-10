@@ -14,7 +14,7 @@ class SentinelCheckinHandler(
             val filePath = file.path
             val riskLevel = RiskMapEngine.classify(filePath)
 
-            println("=== SENTINEL: $filePath → $riskLevel")
+            println("===SENTINEL: $filePath → $riskLevel")
 
             if (riskLevel >= RiskLevel.MEDIUM) {
                 val content = String(file.contentsToByteArray())
