@@ -1,7 +1,7 @@
 package dev.marko.sentinelai
 
-import com.intellij.openapi.vcs.checkin.CheckinHandler
 import com.intellij.openapi.vcs.CheckinProjectPanel
+import com.intellij.openapi.vcs.checkin.CheckinHandler
 
 class SentinelCheckinHandler(
     private val panel: CheckinProjectPanel
@@ -11,29 +11,22 @@ class SentinelCheckinHandler(
         val findings = mutableListOf<ScanFinding>()
 
         panel.virtualFiles.forEach { file ->
-            val filePath = file.path
-            val riskLevel = RiskMapEngine.classify(filePath)
-
-            println("===SENTINEL: $filePath → $riskLevel")
-
+            val riskLevel = RiskMapEngine.classify(file.path)
             if (riskLevel >= RiskLevel.MEDIUM) {
                 val content = String(file.contentsToByteArray())
-                val fileFindings = Level1Scanner.scan(filePath, content)
-                findings.addAll(fileFindings)
+                findings.addAll(Level1Scanner.scan(file.path, content))
             }
         }
 
-        if (findings.isNotEmpty()) {
-            findings.forEach { finding ->
-                println("=== SENTINEL FINDING: [${finding.file}:${finding.line}] ${finding.description}")
-                println("    ${finding.snippet}")
-            }
+        if (findings.isEmpty()) return ReturnResult.COMMIT
 
-            // TODO: Instead of printing add dialog block
-            return ReturnResult.COMMIT
+        val dialog = SentinelBlockDialog(panel.project, findings)
+        dialog.show()
+
+        return if (dialog.shouldCommitAnyway()) {
+            ReturnResult.COMMIT
+        } else {
+            ReturnResult.CANCEL
         }
-
-        println("=== SENTINEL: No issues found, commit allowed")
-        return ReturnResult.COMMIT
     }
 }
