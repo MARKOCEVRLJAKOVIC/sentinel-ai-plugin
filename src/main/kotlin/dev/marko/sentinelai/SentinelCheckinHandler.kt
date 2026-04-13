@@ -9,7 +9,7 @@ import com.intellij.openapi.vcs.checkin.CheckinHandler
  * Flow:
  *  1. Run Level 1 regex/PSI scan synchronously on MEDIUM+ files.
  *     If CRITICAL findings: show block dialog, let developer decide.
- *  2. Launch Level 2 Ollama scan asynchronously on HIGH/CRITICAL files.
+ *  2. Launch Level 2 Claude Haiku scan asynchronously on HIGH/CRITICAL files.
  *     Commit completes immediately; result is stored in SentinelState.
  *  3. PushHandler picks up the result when the developer hits "Push".
  */
@@ -26,10 +26,8 @@ class SentinelCheckinHandler(
         }
 
         // Level 1: synchronous scan on MEDIUM+ files
-        val level1Files = allFiles.filter { it.riskLevel >= RiskLevel.MEDIUM }
         val level1Findings = mutableListOf<ScanFinding>()
-
-        level1Files.forEach { fileCtx ->
+        allFiles.forEach { fileCtx ->
             level1Findings.addAll(Level1Scanner.scan(fileCtx.absolutePath, fileCtx.content))
         }
 
@@ -44,14 +42,13 @@ class SentinelCheckinHandler(
             // Developer chose "Commit Anyway", proceed but still run AI scan
         }
 
-        // Level 2: async Ollama scan on HIGH/CRITICAL files
-        val highRiskFiles = allFiles.filter { it.riskLevel >= RiskLevel.HIGH }
+        // Level 2: async Claude Haiku scan on HIGH/CRITICAL files
+        val highRiskFiles = allFiles.filter { it.riskLevel >= RiskLevel.MEDIUM }
         if (highRiskFiles.isNotEmpty()) {
-            val future = OllamaService.analyzeAsync(
-                files        = highRiskFiles,
-                model        = SentinelConfig.aiModel,
-                ollamaUrl    = SentinelConfig.ollamaUrl,
-                runDeepScan  = true
+            val future = ClaudeService.analyzeAsync(
+                files  = highRiskFiles,
+                model  = SentinelConfig.aiModel,
+                apiKey = SentinelConfig.apiKey
             )
 
             SentinelState.getInstance(panel.project).setPending(

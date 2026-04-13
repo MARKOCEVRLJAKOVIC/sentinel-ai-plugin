@@ -145,8 +145,17 @@ object ResponseParser {
 
     fun parse(raw: String): AiScanResult {
         if (raw.isBlank()) {
-            LOG.warn("SentinelAI: Ollama returned empty response")
+            LOG.warn("SentinelAI: AI returned empty response")
             return AiScanResult.ParseError("(empty response)")
+        }
+
+        // Claude Haiku typically returns clean JSON, try direct parse first
+        try {
+            val parsed = json.decodeFromString<SecurityFindingsResponse>(raw)
+            LOG.info("SentinelAI: parsed ${parsed.findings.size} finding(s) from Claude")
+            return AiScanResult.Success(parsed.findings)
+        } catch (_: Exception) {
+            // Fallback: extract JSON block if Claude added any preamble
         }
 
         val jsonString = JSON_BLOCK_REGEX.find(raw)?.value
@@ -156,8 +165,8 @@ object ResponseParser {
         }
 
         return try {
-            val parsed = json.decodeFromString<OllamaFindingsResponse>(jsonString)
-            LOG.info("SentinelAI: parsed ${parsed.findings.size} finding(s) from Ollama")
+            val parsed = json.decodeFromString<SecurityFindingsResponse>(jsonString)
+            LOG.info("SentinelAI: parsed ${parsed.findings.size} finding(s) from Claude (extracted)")
             AiScanResult.Success(parsed.findings)
         } catch (e: Exception) {
             LOG.warn("SentinelAI: JSON parse failed — ${e.message}\nRaw:\n${raw.take(300)}")

@@ -36,6 +36,10 @@
         <notificationGroup id="SentinelAI"
                            displayType="BALLOON"
                            isLogByDefault="true" />
+
+        <projectService serviceImplementation="dev.marko.sentinelai.SentinelState"/>
+
+
     </extensions>
 
 

@@ -23,9 +23,9 @@ fun showConnectionErrorNotification(project: Project, message: String) {
     NotificationGroupManager.getInstance()
         .getNotificationGroup(NOTIFICATION_GROUP)
         .createNotification(
-            "SentinelAI — Ollama Unreachable",
+            "SentinelAI — Claude API Unreachable",
             "AI scan skipped: $message\n" +
-                    "Push allowed. Start Ollama to enable Level 2 scanning.",
+                    "Push allowed. Check your API key and network to enable Level 2 scanning.",
             NotificationType.WARNING
         )
         .notify(project)

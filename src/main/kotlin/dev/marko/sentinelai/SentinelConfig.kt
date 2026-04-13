@@ -9,15 +9,28 @@ private val LOG = Logger.getInstance(SentinelConfig::class.java)
 object SentinelConfig {
 
     // Defaults
-    var aiModel          : String          = "codellama:7b"              ; private set
-    var ollamaUrl        : String          = "http://localhost:11434"    ; private set
-    var aiTimeoutSeconds : Int             = 15                          ; private set
+    var aiProvider       : String          = "anthropic"                  ; private set
+    var aiModel          : String          = "claude-haiku-4-5"          ; private set
+    var apiKeyEnvVar     : String          = "SENTINEL_API_KEY"          ; private set
+    var aiTimeoutSeconds : Int             = 10                           ; private set
     var timeoutBehavior  : TimeoutBehavior = TimeoutBehavior.WARN        ; private set
     var blockOn          : Set<String>     = setOf("api_keys", "system_prompts", "private_keys", "db_credentials") ; private set
     var warnOn           : Set<String>     = setOf("pii", "debug_logs") ; private set
     var ignorePatterns   : List<Regex>     = emptyList()                 ; private set
+    var neverSendToCloud : List<Regex>     = listOf(
+        Regex(".*\\.pem$"),
+        Regex(".*\\.key$"),
+        Regex(".*secrets.*"),
+        Regex(".*credentials.*")
+    )                                                                     ; private set
     var customPatterns   : List<CustomPattern> = emptyList()            ; private set
-    var runDeepScan      : Boolean         = true                        ; private set
+
+    /**
+     * Resolve the API key from the environment variable configured in .sentinel.yml.
+     * NEVER reads the key from the config file itself.
+     */
+    val apiKey: String
+        get() = System.getenv(apiKeyEnvVar) ?: ""
 
     // Reload from disk
 
@@ -33,10 +46,10 @@ object SentinelConfig {
             val root     = Yaml().load<Map<String, Any>>(configFile.readText())
             val sentinel = root["sentinel"] as? Map<*, *> ?: return
 
-            aiModel          = sentinel["ai_model"]?.toString()            ?: aiModel
-            ollamaUrl        = sentinel["ollama_url"]?.toString()          ?: ollamaUrl
-            aiTimeoutSeconds = (sentinel["ai_timeout_seconds"] as? Int)    ?: aiTimeoutSeconds
-            runDeepScan      = (sentinel["deep_scan"] as? Boolean)         ?: runDeepScan
+            aiProvider       = sentinel["ai_provider"]?.toString()          ?: aiProvider
+            aiModel          = sentinel["ai_model"]?.toString()             ?: aiModel
+            apiKeyEnvVar     = sentinel["api_key_env"]?.toString()          ?: apiKeyEnvVar
+            aiTimeoutSeconds = (sentinel["ai_timeout_seconds"] as? Int)     ?: aiTimeoutSeconds
 
             timeoutBehavior = when (sentinel["timeout_behavior"]?.toString()?.lowercase()) {
                 "block" -> TimeoutBehavior.BLOCK
@@ -55,9 +68,14 @@ object SentinelConfig {
                 ?.mapNotNull { runCatching { Regex(globToRegex(it)) }.getOrNull() }
                 ?: emptyList()
 
+            @Suppress("UNCHECKED_CAST")
+            neverSendToCloud = (sentinel["never_send_to_cloud"] as? List<String>)
+                ?.mapNotNull { runCatching { Regex(globToRegex(it)) }.getOrNull() }
+                ?: neverSendToCloud
+
             customPatterns = parseCustomPatterns(sentinel["custom_patterns"])
 
-            LOG.info("SentinelAI: Loaded .sentinel.yml — model=$aiModel, timeout=${aiTimeoutSeconds}s")
+            LOG.info("SentinelAI: Loaded .sentinel.yml — provider=$aiProvider, model=$aiModel, timeout=${aiTimeoutSeconds}s")
 
         } catch (e: Exception) {
             LOG.warn("SentinelAI: Failed to parse .sentinel.yml — ${e.message}. Using defaults.")

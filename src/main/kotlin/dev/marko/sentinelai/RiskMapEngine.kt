@@ -21,7 +21,8 @@ object RiskMapEngine {
     )
 
     private val MEDIUM_PATTERNS = listOf(
-        Regex(""".*\w*(Service|Auth|Security|Controller)\w*\.(kt|java)$""")
+        Regex(""".*\w*(Service|Auth|Security|Controller)\w*\.(kt|java)$"""),
+        Regex(""".*\.(kt|java)$""")
     )
 
     fun classify(filePath: String): RiskLevel {

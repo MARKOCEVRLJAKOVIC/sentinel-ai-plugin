@@ -2,6 +2,7 @@ plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "2.1.20"
     id("org.jetbrains.intellij.platform") version "2.10.2"
+    kotlin("plugin.serialization") version "2.1.20"
 }
 
 group = "dev.marko"
@@ -24,6 +25,8 @@ dependencies {
         // bundledPlugin("com.intellij.java")
         bundledPlugin("Git4Idea")
     }
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
+    implementation("org.yaml:snakeyaml:2.2")
 }
 
 intellijPlatform {

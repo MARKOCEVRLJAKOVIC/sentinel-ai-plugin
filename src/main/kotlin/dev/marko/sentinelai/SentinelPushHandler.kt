@@ -40,7 +40,6 @@ class SentinelPushHandler(private val project: Project) {
                     showFindingsAndDecide(result.findings)
                 }
             }
-            // ISPRAVKA 1: uklonjen višak razmaka u tipu
             is AiScanResult.NoHighRiskFiles -> {
                 LOG.info("SentinelAI: No high-risk files — push allowed")
                 true
@@ -111,7 +110,7 @@ class SentinelPushHandler(private val project: Project) {
                     project,
                     "SentinelAI AI scan did not complete within ${SentinelConfig.aiTimeoutSeconds}s.\n" +
                             "Push blocked (timeout_behavior = block in .sentinel.yml).\n" +
-                            "Start Ollama and try again, or change timeout_behavior to 'warn'.",
+                            "Check your network and API key, or change timeout_behavior to 'warn'.",
                     "SentinelAI — Push Blocked"
                 )
                 false

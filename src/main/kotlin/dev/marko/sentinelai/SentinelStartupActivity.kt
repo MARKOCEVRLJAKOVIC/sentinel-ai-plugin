@@ -13,7 +13,7 @@ private val LOG = Logger.getInstance("SentinelAI.Startup")
  *
  * Responsibilities:
  *  1. Load .sentinel.yml config
- *  2. Optionally run Ollama health check and notify if unavailable
+ *  2. Optionally run Claude API health check and notify if unavailable
  *  3. Log which model is configured
  */
 class SentinelStartupActivity : ProjectActivity {
@@ -24,17 +24,23 @@ class SentinelStartupActivity : ProjectActivity {
 
         LOG.info("SentinelAI: Initialized for project '${project.name}' — model=${SentinelConfig.aiModel}")
 
+        val apiKey = SentinelConfig.apiKey
+        if (apiKey.isBlank()) {
+            LOG.warn("SentinelAI: No API key found in env var '${SentinelConfig.apiKeyEnvVar}'. Level 2 AI scanning is disabled.")
+            return
+        }
+
         // Background health check, only warn, never block startup
-        val healthError = OllamaClient.healthCheck(
-            model   = SentinelConfig.aiModel,
-            baseUrl = SentinelConfig.ollamaUrl
+        val healthError = ClaudeClient.healthCheck(
+            apiKey = apiKey,
+            model  = SentinelConfig.aiModel
         )
         if (healthError != null) {
-            LOG.warn("SentinelAI: Ollama health check failed — $healthError")
+            LOG.warn("SentinelAI: Claude health check failed — $healthError")
             // You can show a balloon notification here using NotificationGroupManager
             // For MVP: just log; developer will see the error on push
         } else {
-            LOG.info("SentinelAI: Ollama reachable, model '${SentinelConfig.aiModel}' available ✓")
+            LOG.info("SentinelAI: Claude API reachable, model '${SentinelConfig.aiModel}' validated ✓")
         }
     }
 }
@@ -56,12 +62,13 @@ class SentinelStartupActivity : ProjectActivity {
 class SentinelGitPushListener : GitRepositoryChangeListener {
 
     override fun repositoryChanged(repository: GitRepository) {
-        // When a repository updates its tracking branch, a push has occurred.
-        // Clear any stale pending analysis.
         val project = repository.project
-        if (SentinelState.getInstance(project).hasPending) {
-            LOG.info("SentinelAI: Repository changed externally, clearing stale pending analysis")
-            SentinelState.getInstance(project).takeAndClear()
+        val state = SentinelState.getInstance(project)
+        if (state.hasPending) {
+            com.intellij.openapi.application.ApplicationManager.getApplication()
+                .invokeLater {
+                    SentinelPushHandler(project).checkBeforePush()
+                }
         }
     }
 }
