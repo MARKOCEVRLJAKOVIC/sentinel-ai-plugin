@@ -3,30 +3,65 @@ package dev.marko.sentinelai
 import com.intellij.openapi.vcs.CheckinProjectPanel
 import com.intellij.openapi.vcs.checkin.CheckinHandler
 
+/**
+ * Level 1 (sync) + Level 2 trigger (async).
+ *
+ * Flow:
+ *  1. Run Level 1 regex/PSI scan synchronously on MEDIUM+ files.
+ *     If CRITICAL findings: show block dialog, let developer decide.
+ *  2. Launch Level 2 Ollama scan asynchronously on HIGH/CRITICAL files.
+ *     Commit completes immediately; result is stored in SentinelState.
+ *  3. PushHandler picks up the result when the developer hits "Push".
+ */
 class SentinelCheckinHandler(
     private val panel: CheckinProjectPanel
 ) : CheckinHandler() {
 
     override fun beforeCheckin(): ReturnResult {
-        val findings = mutableListOf<ScanFinding>()
+        val projectBasePath = panel.project.basePath ?: ""
 
-        panel.virtualFiles.forEach { file ->
-            val riskLevel = RiskMapEngine.classify(file.path)
-            if (riskLevel >= RiskLevel.MEDIUM) {
-                val content = String(file.contentsToByteArray())
-                findings.addAll(Level1Scanner.scan(file.path, content))
+        // Classify all changed files
+        val allFiles = panel.virtualFiles.map { vf ->
+            vf.toFileWithContent(projectBasePath)
+        }
+
+        // Level 1: synchronous scan on MEDIUM+ files
+        val level1Files = allFiles.filter { it.riskLevel >= RiskLevel.MEDIUM }
+        val level1Findings = mutableListOf<ScanFinding>()
+
+        level1Files.forEach { fileCtx ->
+            level1Findings.addAll(Level1Scanner.scan(fileCtx.absolutePath, fileCtx.content))
+        }
+
+        if (level1Findings.isNotEmpty()) {
+            val dialog = SentinelBlockDialog(panel.project, level1Findings)
+            dialog.show()
+
+            // Developer chose to fix, cancel commit
+            if (!dialog.shouldCommitAnyway()) {
+                return ReturnResult.CANCEL
             }
+            // Developer chose "Commit Anyway", proceed but still run AI scan
         }
 
-        if (findings.isEmpty()) return ReturnResult.COMMIT
+        // Level 2: async Ollama scan on HIGH/CRITICAL files
+        val highRiskFiles = allFiles.filter { it.riskLevel >= RiskLevel.HIGH }
+        if (highRiskFiles.isNotEmpty()) {
+            val future = OllamaService.analyzeAsync(
+                files        = highRiskFiles,
+                model        = SentinelConfig.aiModel,
+                ollamaUrl    = SentinelConfig.ollamaUrl,
+                runDeepScan  = true
+            )
 
-        val dialog = SentinelBlockDialog(panel.project, findings)
-        dialog.show()
-
-        return if (dialog.shouldCommitAnyway()) {
-            ReturnResult.COMMIT
-        } else {
-            ReturnResult.CANCEL
+            SentinelState.getInstance(panel.project).setPending(
+                PendingAnalysis(
+                    future = future,
+                    filesAnalysed = highRiskFiles.map { it.relativePath }
+                )
+            )
         }
+
+        return ReturnResult.COMMIT
     }
 }

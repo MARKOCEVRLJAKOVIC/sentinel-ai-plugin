@@ -20,6 +20,7 @@
     <!-- Product and plugin compatibility requirements.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.vcs</depends>
     <depends>Git4Idea</depends>
 
 
@@ -29,5 +30,25 @@
     <extensions defaultExtensionNs="com.intellij">
         <vcsCheckinHandlerFactory
                 implementation="dev.marko.sentinelai.SentinelCheckinHandlerFactory"/>
+        <postStartupActivity
+                implementation="dev.marko.sentinelai.SentinelStartupActivity"/>
+
+        <notificationGroup id="SentinelAI"
+                           displayType="BALLOON"
+                           isLogByDefault="true" />
     </extensions>
+
+
+
+    <applicationListeners>
+        <!--
+            Git push listener registered at application level.
+            SentinelGitPushListener wraps SentinelPushHandler and is called
+            before each push completes.
+        -->
+        <listener
+                class="dev.marko.sentinelai.SentinelGitPushListener"
+                topic="git4idea.repo.GitRepositoryChangeListener"/>
+    </applicationListeners>
+
 </idea-plugin>
