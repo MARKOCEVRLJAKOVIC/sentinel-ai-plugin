@@ -25,7 +25,8 @@ dependencies {
         // bundledPlugin("com.intellij.java")
         bundledPlugin("Git4Idea")
     }
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("org.yaml:snakeyaml:2.2")
 }
 

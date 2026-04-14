@@ -2,7 +2,7 @@ package dev.marko.sentinelai.startup
 
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
@@ -13,6 +13,10 @@ import dev.marko.sentinelai.config.SentinelConfig
 import dev.marko.sentinelai.state.SentinelState
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryChangeListener
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 private val LOG = Logger.getInstance("SentinelAI.Startup")
 
@@ -30,25 +34,23 @@ class SentinelStartupActivity : ProjectActivity {
         val basePath = project.basePath ?: return
         SentinelConfig.reload(basePath)
 
-        LOG.info("SentinelAI: Initialized for project '${project.name}' — model=${SentinelConfig.aiModel}")
+        LOG.info("Initialized for project '${project.name}' — model=${SentinelConfig.aiModel}")
 
         val apiKey = SentinelConfig.apiKey
         if (apiKey.isBlank()) {
-            LOG.warn("SentinelAI: No API key found in env var '${SentinelConfig.apiKeyEnvVar}'. Level 2 AI scanning is disabled.")
+            LOG.warn("No API key found in env var '${SentinelConfig.apiKeyEnvVar}'. Level 2 AI scanning is disabled.")
             return
         }
 
-        // Background health check, only warn, never block startup
+        // Background health check — now properly suspends instead of blocking
         val healthError = ClaudeClient.healthCheck(
             apiKey = apiKey,
             model  = SentinelConfig.aiModel
         )
         if (healthError != null) {
-            LOG.warn("SentinelAI: Claude health check failed — $healthError")
-            // You can show a balloon notification here using NotificationGroupManager
-            // For MVP: just log; developer will see the error on push
+            LOG.warn("Claude health check failed — $healthError")
         } else {
-            LOG.info("SentinelAI: Claude API reachable, model '${SentinelConfig.aiModel}' validated ✓")
+            LOG.info("Claude API reachable, model '${SentinelConfig.aiModel}' validated ✓")
         }
     }
 }
@@ -56,27 +58,20 @@ class SentinelStartupActivity : ProjectActivity {
 /**
  * Listens for Git repository changes and intercepts pushes.
  *
- * NOTE: In IntelliJ, there is no clean single "before push" hook that reliably
- * blocks. The most practical MVP approach is to hook into the push via the
- * CheckinHandler (Strategy A from plugin.xml), which already fires for the
- * combined Commit+Push action.
- *
- * This listener is kept here as a hook point for future Strategy C (git hook
- * script generation), where the plugin writes a pre-push hook to .git/hooks/.
- *
- * For now: it monitors repository state changes so SentinelState can be
- * cleared if a push completes externally (e.g., via terminal).
+ * Uses [serviceCoroutineScope] to launch the push check on the EDT
+ * without blocking the listener callback thread.
  */
 class SentinelGitPushListener : GitRepositoryChangeListener {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun repositoryChanged(repository: GitRepository) {
         val project = repository.project
         val state = SentinelState.getInstance(project)
         if (state.hasPending) {
-            ApplicationManager.getApplication()
-                .invokeLater {
-                    SentinelPushHandler(project).checkBeforePush()
-                }
+            scope.launch(Dispatchers.EDT) {
+                SentinelPushHandler(project).checkBeforePush()
+            }
         }
     }
 }

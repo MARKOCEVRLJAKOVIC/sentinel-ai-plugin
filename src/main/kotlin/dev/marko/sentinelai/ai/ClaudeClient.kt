@@ -1,6 +1,8 @@
 package dev.marko.sentinelai.ai
 
 import com.intellij.openapi.diagnostic.Logger
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.future.await
 import kotlinx.serialization.json.*
 import java.net.URI
 import java.net.http.HttpClient
@@ -14,19 +16,18 @@ import java.time.Duration
  * Endpoint:  POST https://api.anthropic.com/v1/messages
  * Docs:      https://docs.anthropic.com/en/api/messages
  *
- * No external dependencies — uses Java 17 java.net.http.HttpClient.
+ * All public methods are suspend functions — they never block the calling thread.
+ * Uses Java 17 [HttpClient.sendAsync] under the hood.
  */
 object ClaudeClient {
-
-    private val LOG = Logger.getInstance(ClaudeClient::class.java)
 
     private const val ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
     private const val ANTHROPIC_VERSION = "2023-06-01"
     private const val CONNECT_TIMEOUT_SEC = 5L
-    private const val REQUEST_TIMEOUT_SEC = 30L   // Claude Haiku ~1s, generous timeout
+    private const val REQUEST_TIMEOUT_SEC = 30L
 
     private const val MAX_RETRIES = 3
-    private val RETRY_DELAYS_MS = longArrayOf(1_000, 2_000, 4_000)  // exponential backoff
+    private val RETRY_DELAYS_MS = longArrayOf(1_000, 2_000, 4_000)
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -37,20 +38,19 @@ object ClaudeClient {
         .connectTimeout(Duration.ofSeconds(CONNECT_TIMEOUT_SEC))
         .build()
 
+    private val LOG = Logger.getInstance(ClaudeClient::class.java)
+
     // Public API
 
     /**
      * Send [userPrompt] with [systemPrompt] to Claude and return the raw text response.
      *
-     * @param apiKey       Anthropic API key (sk-ant-...)
-     * @param model        Model name, e.g. "claude-haiku-4-5"
-     * @param userPrompt   The user-turn content (diff + instructions)
-     * @param systemPrompt The system-turn content (role definition)
-     * @param maxTokens    Maximum tokens in the response
+     * This is a suspend function — it will not block the calling thread while
+     * waiting for the HTTP response or during retry backoff.
      *
      * @throws ClaudeException on any network, HTTP, or API error
      */
-    fun analyze(
+    suspend fun analyze(
         apiKey: String,
         userPrompt: String,
         systemPrompt: String,
@@ -78,7 +78,7 @@ object ClaudeClient {
             .POST(HttpRequest.BodyPublishers.ofString(requestBody))
             .build()
 
-        LOG.debug("SentinelAI → Claude request: model=$model, prompt_length=${userPrompt.length}")
+        LOG.debug("Claude request: model=$model, prompt_length=${userPrompt.length}")
 
         return executeWithRetry(httpRequest)
     }
@@ -87,13 +87,12 @@ object ClaudeClient {
      * Check whether the Anthropic API is reachable and the API key is valid.
      * Returns null on success, or an error message string.
      */
-    fun healthCheck(apiKey: String, model: String = "claude-haiku-4-5"): String? {
+    suspend fun healthCheck(apiKey: String, model: String = "claude-haiku-4-5"): String? {
         if (apiKey.isBlank()) {
             return "No API key configured. Set the SENTINEL_API_KEY environment variable."
         }
 
         return try {
-            // Send a minimal request to verify the API key works
             val requestBody = buildJsonObject {
                 put("model", model)
                 put("max_tokens", 10)
@@ -115,9 +114,9 @@ object ClaudeClient {
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build()
 
-            val resp = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString())
+            val resp = httpClient.sendAsync(httpRequest, HttpResponse.BodyHandlers.ofString()).await()
             when (resp.statusCode()) {
-                200 -> null   // all good
+                200 -> null
                 401 -> "Invalid API key. Check your SENTINEL_API_KEY environment variable."
                 403 -> "API key lacks permissions. Check your Anthropic account."
                 else -> "Anthropic API returned HTTP ${resp.statusCode()}: ${resp.body().take(200)}"
@@ -129,24 +128,23 @@ object ClaudeClient {
 
     // Internal
 
-    private fun executeWithRetry(request: HttpRequest): String {
+    private suspend fun executeWithRetry(request: HttpRequest): String {
         var lastException: Exception? = null
 
         for (attempt in 0 until MAX_RETRIES) {
             try {
-                val httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+                val httpResponse = httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()).await()
 
                 when (httpResponse.statusCode()) {
                     200 -> {
                         val text = extractTextFromResponse(httpResponse.body())
-                        LOG.debug("SentinelAI ← Claude response length: ${text.length}")
+                        LOG.debug("Claude response length: ${text.length}")
                         return text
                     }
                     429 -> {
-                        // Rate limited — retry with backoff
-                        val delay = RETRY_DELAYS_MS.getOrElse(attempt) { 4_000 }
-                        LOG.warn("SentinelAI: Claude rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/$MAX_RETRIES)")
-                        Thread.sleep(delay)
+                        val backoff = RETRY_DELAYS_MS.getOrElse(attempt) { 4_000 }
+                        LOG.warn("Claude rate limited (429), retrying in ${backoff}ms (attempt ${attempt + 1}/$MAX_RETRIES)")
+                        delay(backoff)
                         continue
                     }
                     401 -> throw ClaudeException(
@@ -157,13 +155,13 @@ object ClaudeClient {
                     )
                 }
             } catch (e: ClaudeException) {
-                throw e  // don't retry on auth errors
+                throw e
             } catch (e: Exception) {
                 lastException = e
                 if (attempt < MAX_RETRIES - 1) {
-                    val delay = RETRY_DELAYS_MS.getOrElse(attempt) { 4_000 }
-                    LOG.warn("SentinelAI: Claude request failed (attempt ${attempt + 1}/$MAX_RETRIES): ${e.message}, retrying in ${delay}ms")
-                    Thread.sleep(delay)
+                    val backoff = RETRY_DELAYS_MS.getOrElse(attempt) { 4_000 }
+                    LOG.warn("Claude request failed (attempt ${attempt + 1}/$MAX_RETRIES): ${e.message}, retrying in ${backoff}ms")
+                    delay(backoff)
                 }
             }
         }
@@ -176,14 +174,6 @@ object ClaudeClient {
 
     /**
      * Extract the text content from Claude's Messages API response.
-     *
-     * Response format:
-     * ```json
-     * {
-     *   "content": [{ "type": "text", "text": "..." }],
-     *   ...
-     * }
-     * ```
      */
     private fun extractTextFromResponse(responseBody: String): String {
         return try {

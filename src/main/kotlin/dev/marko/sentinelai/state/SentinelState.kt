@@ -3,7 +3,7 @@ package dev.marko.sentinelai.state
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import com.jetbrains.rd.util.AtomicReference
+import java.util.concurrent.atomic.AtomicReference
 import dev.marko.sentinelai.ai.PendingAnalysis
 
 /**
@@ -11,7 +11,7 @@ import dev.marko.sentinelai.ai.PendingAnalysis
  * with [SentinelPushHandler] (push time).
  *
  * Lifecycle:
- *  1. CheckinHandler stores a CompletableFuture<AiScanResult> here after commit
+ *  1. CheckinHandler stores a Deferred<AiScanResult> here after commit
  *  2. PushHandler reads & clears it before each push
  *
  * Registered in plugin.xml as:
@@ -25,8 +25,8 @@ class SentinelState {
 
     /** Store a new pending analysis. Called from CheckinHandler on EDT. */
     fun setPending(analysis: PendingAnalysis) {
-        // Cancel any leftover future from a previous (possibly abandoned) commit
-        pendingRef.getAndSet(analysis)?.future?.cancel(true)
+        // Cancel any leftover deferred from a previous (possibly abandoned) commit
+        pendingRef.getAndSet(analysis)?.result?.cancel()
     }
 
     /**

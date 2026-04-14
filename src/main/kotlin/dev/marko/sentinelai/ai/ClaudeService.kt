@@ -3,10 +3,8 @@ package dev.marko.sentinelai.ai
 import com.intellij.openapi.diagnostic.Logger
 import dev.marko.sentinelai.config.SentinelConfig
 import dev.marko.sentinelai.scan.RiskLevel
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executors
-
-private val LOG = Logger.getInstance(ClaudeService::class.java)
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Orchestrates the Level 2 AI scan via the Claude Haiku API.
@@ -15,45 +13,46 @@ private val LOG = Logger.getInstance(ClaudeService::class.java)
  *  1. Filter incoming files to HIGH/CRITICAL only
  *  2. Enforce the never_send_to_cloud list — CRITICAL files bypass cloud AI
  *  3. Build the prompt via [PromptBuilder]
- *  4. Call [ClaudeClient] on a background thread
+ *  4. Call [ClaudeClient] (suspend, non-blocking)
  *  5. Parse the response via [ResponseParser]
- *  6. Return a [CompletableFuture<AiScanResult>] immediately (non-blocking)
+ *  6. Return an [AiScanResult] directly (caller launches the coroutine)
  *
- * The [SentinelCheckinHandler] stores the future in [SentinelState]; the
- * [SentinelPushHandler] reads it when the developer tries to push.
+ * The [Mutex] ensures at most one Claude call is in-flight at a time,
+ * replacing the old single-thread executor.
  */
 object ClaudeService {
 
-    // Single-threaded executor — we never want two Claude calls racing
-    private val executor = Executors.newSingleThreadExecutor { r ->
-        Thread(r, "SentinelAI-Claude").apply { isDaemon = true }
-    }
+    private val LOG = Logger.getInstance(ClaudeService::class.java)
+
+    // Mutex — we never want two Claude calls racing
+    private val scanMutex = Mutex()
 
     /**
-     * Launch a Level 2 analysis for [files] asynchronously.
+     * Run a Level 2 analysis for [files].
      *
-     * @param files   All changed files (will be filtered internally to HIGH+)
+     * This is a suspend function — call it from a coroutine launched via
+     * `serviceCoroutineScope`. The [Mutex] serialises concurrent calls.
+     *
+     * @param files   All changed files (will be filtered internally to MEDIUM+)
      * @param model   Claude model name (from .sentinel.yml, default claude-haiku-4-5)
      * @param apiKey  Anthropic API key (read from env variable)
      */
-    fun analyzeAsync(
+    suspend fun analyze(
         files: List<FileWithContent>,
         model: String = "claude-haiku-4-5",
         apiKey: String
-    ): CompletableFuture<AiScanResult> {
+    ): AiScanResult {
 
         if (apiKey.isBlank()) {
-            LOG.warn("SentinelAI: No API key configured — skipping Level 2 scan")
-            return CompletableFuture.completedFuture(
-                AiScanResult.ConnectionError("No API key. Set the SENTINEL_API_KEY environment variable.")
-            )
+            LOG.warn("No API key configured — skipping Level 2 scan")
+            return AiScanResult.ConnectionError("No API key. Set the SENTINEL_API_KEY environment variable.")
         }
 
         val highRiskFiles = files.filter { it.riskLevel >= RiskLevel.MEDIUM }
 
         if (highRiskFiles.isEmpty()) {
-            LOG.info("SentinelAI: No MEDIUM+ files — skipping Level 2 scan")
-            return CompletableFuture.completedFuture(AiScanResult.NoHighRiskFiles)
+            LOG.info("No MEDIUM+ files — skipping Level 2 scan")
+            return AiScanResult.NoHighRiskFiles
         }
 
         // Filter out files that must never be sent to cloud AI
@@ -62,33 +61,33 @@ object ClaudeService {
                 pattern.containsMatchIn(file.relativePath) || pattern.containsMatchIn(file.absolutePath)
             }
             if (blocked) {
-                LOG.info("SentinelAI: Skipping ${file.relativePath} — matches never_send_to_cloud")
+                LOG.info("Skipping ${file.relativePath} — matches never_send_to_cloud")
             }
             !blocked
         }
 
         if (cloudSafeFiles.isEmpty()) {
-            LOG.info("SentinelAI: All HIGH/CRITICAL files are blocked by never_send_to_cloud — Level 1 only")
-            return CompletableFuture.completedFuture(AiScanResult.NoHighRiskFiles)
+            LOG.info("All HIGH/CRITICAL files are blocked by never_send_to_cloud — Level 1 only")
+            return AiScanResult.NoHighRiskFiles
         }
 
-        LOG.info("SentinelAI: Starting async Level 2 Claude scan for ${cloudSafeFiles.size} file(s)")
+        LOG.info("Starting Level 2 Claude scan for ${cloudSafeFiles.size} file(s)")
 
-        return CompletableFuture.supplyAsync({
+        return scanMutex.withLock {
             runScan(cloudSafeFiles, model, apiKey)
-        }, executor)
+        }
     }
 
     // Internal
 
-    private fun runScan(
+    private suspend fun runScan(
         files: List<FileWithContent>,
         model: String,
         apiKey: String
     ): AiScanResult {
         return try {
             val prompt = PromptBuilder.buildScanPrompt(files)
-            LOG.debug("SentinelAI: Level 2 scan prompt length = ${prompt.length}")
+            LOG.debug("Level 2 scan prompt length = ${prompt.length}")
 
             val rawResponse = ClaudeClient.analyze(
                 apiKey       = apiKey,
@@ -99,7 +98,7 @@ object ClaudeService {
 
             ResponseParser.parse(rawResponse)
         } catch (e: ClaudeException) {
-            LOG.warn("SentinelAI: Claude API error — ${e.message}")
+            LOG.warn("Claude API error — ${e.message}")
             AiScanResult.ConnectionError(e.message ?: "Unknown error")
         }
     }

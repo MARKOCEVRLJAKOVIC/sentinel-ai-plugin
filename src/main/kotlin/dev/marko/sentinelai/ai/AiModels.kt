@@ -1,8 +1,8 @@
 package dev.marko.sentinelai.ai
 
+import kotlinx.coroutines.Deferred
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.util.concurrent.CompletableFuture
 
 // AI Finding (Level 2 output)
 
@@ -52,7 +52,7 @@ sealed class AiScanResult {
  * Stored as an IntelliJ project-level service (see plugin.xml).
  */
 data class PendingAnalysis(
-    val future: CompletableFuture<AiScanResult>,
-    val commitHash: String = "", // optional: for logging
+    val result: Deferred<AiScanResult>,
+    val commitHash: String = "",
     val filesAnalysed: List<String> = emptyList()
 )

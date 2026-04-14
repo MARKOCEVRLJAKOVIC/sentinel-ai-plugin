@@ -5,15 +5,15 @@ import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import dev.marko.sentinelai.ai.AiScanResult
+import kotlinx.coroutines.Deferred
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Font
-import java.util.concurrent.CompletableFuture
 import javax.swing.*
 
 class SentinelWaitDialog(
     private val project: Project,
-    private val future: CompletableFuture<AiScanResult>,
+    private val deferred: Deferred<AiScanResult>,
     private val timeoutSeconds: Int
 ) : DialogWrapper(project) {
 
@@ -32,7 +32,7 @@ class SentinelWaitDialog(
         else
             "Scan taking longer than expected…"
 
-        if (future.isDone) {
+        if (deferred.isCompleted) {
             timer.stop()
             close(OK_EXIT_CODE)
         }

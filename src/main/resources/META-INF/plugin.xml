@@ -30,7 +30,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <vcsCheckinHandlerFactory
                 implementation="dev.marko.sentinelai.push.SentinelCheckinHandlerFactory"/>
-        <postStartupActivity
+        <projectActivity
                 implementation="dev.marko.sentinelai.startup.SentinelStartupActivity"/>
 
         <notificationGroup id="SentinelAI"
