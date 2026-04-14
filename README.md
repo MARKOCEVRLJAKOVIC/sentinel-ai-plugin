@@ -1,117 +1,126 @@
-# IntelliJ Platform Plugin Template
+# SentinelAI
 
-[![Twitter Follow](https://img.shields.io/badge/follow-%40JBPlatform-1DA1F2?logo=twitter)](https://twitter.com/JBPlatform)
-[![Developers Forum](https://img.shields.io/badge/JetBrains%20Platform-Join-blue)][jb:forum]
+**AI-Powered Pre-commit Security Guard for IntelliJ IDEA**
 
-## Plugin template structure
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.1.20-blue.svg)](https://kotlinlang.org)
+[![IntelliJ Platform](https://img.shields.io/badge/IntelliJ-2025.x-orange.svg)](https://plugins.jetbrains.com)
+[![Claude Haiku](https://img.shields.io/badge/AI-Claude%20Haiku-purple.svg)](https://anthropic.com)
 
-A generated project contains the following content structure:
+SentinelAI is an open-source IntelliJ IDEA plugin that acts as an automated security checkpoint between your code and your remote repository. It intercepts Git commits and pushes to detect hardcoded secrets, API keys, system prompts, PII, and credentials — before they ever leave your machine.
+
+---
+
+## Inspiration
+
+This project was directly inspired by the **Claude codebase leak** — a real-world incident in which internal Anthropic system prompts were inadvertently exposed. The leak demonstrated that even sophisticated engineering organizations can accidentally commit sensitive AI-related data: system prompts, internal instructions, and proprietary model configuration.
+
+SentinelAI was built to make that class of mistake impossible at the individual developer level. One of its explicit detection categories is `SYSTEM_PROMPT` — hardcoded LLM instructions embedded in source code — alongside the usual suspects like API keys and database credentials.
+
+---
+
+## What it Does (MVP)
+
+The MVP focuses exclusively on **Leak Shield** — detecting and blocking sensitive data from entering your repository.
 
 ```
-.
-├── .run/                   Predefined Run/Debug Configurations
-├── build/                  Output build directory
-├── gradle
-│   ├── wrapper/            Gradle Wrapper
-├── src                     Plugin sources
-│   ├── main
-│   │   ├── kotlin/         Kotlin production sources
-│   │   └── resources/      Resources - plugin.xml, icons, messages
-├── .gitignore              Git ignoring rules
-├── build.gradle.kts        Gradle build configuration
-├── gradle.properties       Gradle configuration properties
-├── gradlew                 *nix Gradle Wrapper script
-├── gradlew.bat             Windows Gradle Wrapper script
-├── README.md               README
-└── settings.gradle.kts     Gradle project settings
+Git Commit  →  Level 1 (regex + PSI, ~0ms)  →  block or pass
+                                                       ↓
+                                          Level 2 (Claude Haiku, ~1s, async)
+                                                       ↓
+Git Push    →  gate: clean? blocked? still running?  →  push or review
 ```
 
-In addition to the configuration files, the most crucial part is the `src` directory, which contains our implementation
-and the manifest for our plugin – [plugin.xml][file:plugin.xml].
+On every commit, the plugin runs two scanners in sequence:
 
-> [!NOTE]
-> To use Java in your plugin, create the `/src/main/java` directory.
+**Level 1 - Instant Scanner** runs synchronously before the commit completes. It uses regex patterns and IntelliJ PSI/AST analysis to catch obvious hardcoded secrets. If it finds a critical issue, it blocks the commit immediately and shows a dialog. Zero network calls, zero latency.
 
-## Plugin configuration file
+**Level 2 - AI Scanner** launches asynchronously in the background. Only diffs from `MEDIUM`-and-above risk files are sent to Claude Haiku — never full file contents. By the time you hit "Push", the analysis is almost always already done. If it's still running, a progress dialog appears with a configurable timeout and a "Push Anyway" escape hatch.
 
-The plugin configuration file is a [plugin.xml][file:plugin.xml] file located in the `src/main/resources/META-INF`
-directory.
-It provides general information about the plugin, its dependencies, extensions, and listeners.
+---
 
-You can read more about this file in the [Plugin Configuration File][docs:plugin.xml] section of our documentation.
+## Detection Categories
 
-If you're still not quite sure what this is all about, read our
-introduction: [What is the IntelliJ Platform?][docs:intro]
+| Category | Examples |
+|---|---|
+| `API_KEY` | OpenAI keys, GitHub tokens, AWS credentials, Google API keys |
+| `SYSTEM_PROMPT` | Hardcoded LLM instructions and AI system prompts |
+| `DB_CREDENTIAL` | JDBC connection strings with embedded passwords |
+| `PRIVATE_KEY` | PEM files, certificates, cryptographic keys |
+| `PII` | Emails, passwords, phone numbers in logs |
 
-$H$H Predefined Run/Debug configurations
+---
 
-Within the default project structure, there is a `.run` directory provided containing predefined *Run/Debug
-configurations* that expose corresponding Gradle tasks:
+## Risk Classification
 
-| Configuration name | Description                                                                                                                                                                         |
-|--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Run Plugin         | Runs [`:runIde`][gh:intellij-platform-gradle-plugin-runIde] IntelliJ Platform Gradle Plugin task. Use the *Debug* icon for plugin debugging.                                        |
-| Run Tests          | Runs [`:test`][gradle:lifecycle-tasks] Gradle task.                                                                                                                                 |
-| Run Verifications  | Runs [`:verifyPlugin`][gh:intellij-platform-gradle-plugin-verifyPlugin] IntelliJ Platform Gradle Plugin task to check the plugin compatibility against the specified IntelliJ IDEs. |
+Every file in a commit is classified before any scanning runs:
 
-> [!NOTE]
-> You can find the logs from the running task in the `idea.log` tab.
+| Level | Files | Scanners |
+|---|---|---|
+| `CRITICAL` | `.env`, `*.pem`, `*.key`, `.idea/dataSources.xml`, `**/secrets/**` | Level 1 + Level 2 AI |
+| `HIGH` | `application.yml`, `application-prod.yml`, `Dockerfile`, `docker-compose.yml`, `**/terraform/**` | Level 1 + Level 2 AI |
+| `MEDIUM` | `*Service*.kt`, `*Auth*.kt`, `*Security*.kt`, `*Controller*.kt` | Level 1 only |
+| `LOW` | Everything else | Skipped |
 
-## Publishing the plugin
+Files listed in `.gitignore` that somehow appear in a diff are automatically escalated to `CRITICAL` — if Git was told to ignore it, it should never be committed.
 
-> [!TIP]
-> Make sure to follow all guidelines listed in [Publishing a Plugin][docs:publishing] to follow all recommended and
-> required steps.
+---
 
-Releasing a plugin to [JetBrains Marketplace](https://plugins.jetbrains.com) is a straightforward operation that uses
-the `publishPlugin` Gradle task provided by
-the [intellij-platform-gradle-plugin][gh:intellij-platform-gradle-plugin-docs].
+## Roadmap
 
-You can also upload the plugin to the [JetBrains Plugin Repository](https://plugins.jetbrains.com/plugin/upload)
-manually via UI.
+**Phase 1 — MVP Leak Shield** *(current)*
+- [x] Gradle IntelliJ plugin project
+- [x] Risk Map Engine
+- [x] Gitignore awareness
+- [x] Level 1 regex
+- [x] CheckinHandler (commit interception)
+- [x] Block and result dialogs
 
-## Useful links
+**Phase 2 — AI Integration** *(current)*
+- [x] Claude Haiku HTTP client
+- [x] API key via environment variable only
+- [x] `never_send_to_cloud` enforcement
+- [x] Prompt builder (diff-only, added lines only)
+- [x] Async execution with coroutines
+- [x] Push gate
+- [x] "Push anyway" override
+- [x] Timeout handling with configurable behavior
+- [x] Exponential backoff with retry
 
-- [IntelliJ Platform SDK Plugin SDK][docs]
-- [IntelliJ Platform Gradle Plugin Documentation][gh:intellij-platform-gradle-plugin-docs]
-- [IntelliJ Platform Explorer][jb:ipe]
-- [JetBrains Marketplace Quality Guidelines][jb:quality-guidelines]
-- [IntelliJ Platform UI Guidelines][jb:ui-guidelines]
-- [JetBrains Marketplace Paid Plugins][jb:paid-plugins]
-- [IntelliJ SDK Code Samples][gh:code-samples]
+**Phase 3 — Polish & Community** *(planned)*
+- [ ] Level 1 PSI along regex
+- [ ] Learning mode to reduce false positives
+- [ ] Custom pattern definitions in `.sentinel.yml`
+- [ ] Per-session cost tracking
+- [ ] Provider abstraction (swap Claude for other LLMs)
+- [ ] Skip history log
+- [ ] Full documentation and CI pipeline
+- [ ] JetBrains Marketplace submission
 
-[docs]: https://plugins.jetbrains.com/docs/intellij
+---
 
-[docs:intro]: https://plugins.jetbrains.com/docs/intellij/intellij-platform.html?from=IJPluginTemplate
+## Tech Stack
 
-[docs:plugin.xml]: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html?from=IJPluginTemplate
+- IntelliJ Platform SDK 2025.x
+- Kotlin 2.1.20 / Java 21
+- Gradle with Kotlin DSL
+- Anthropic Messages API (plain Java `HttpClient`, no external SDK)
+- IntelliJ PSI (Program Structure Interface)
+- SnakeYAML
+- kotlinx.serialization
+- IntelliJ VCS API / Git4Idea
+- GitHub Actions
 
-[docs:publishing]: https://plugins.jetbrains.com/docs/intellij/publishing-plugin.html?from=IJPluginTemplate
+---
 
-[file:plugin.xml]: ./src/main/resources/META-INF/plugin.xml
+## Contributing
 
-[gh:code-samples]: https://github.com/JetBrains/intellij-sdk-code-samples
+Contributions are welcome. The most valuable contributions right now are additional test cases for the Level 1 scanner — both true positives (real secrets that should be caught) and true negatives (safe patterns that should not trigger false alarms). Quality is measured by the false positive and false negative rate in the test suite.
 
-[gh:intellij-platform-gradle-plugin]: https://github.com/JetBrains/intellij-platform-gradle-plugin
+Please open an issue before submitting a large PR.
 
-[gh:intellij-platform-gradle-plugin-docs]: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
+---
 
-[gh:intellij-platform-gradle-plugin-runIde]: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-tasks.html#runIde
+## License
 
-[gh:intellij-platform-gradle-plugin-verifyPlugin]: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-tasks.html#verifyPlugin
-
-[gradle:lifecycle-tasks]: https://docs.gradle.org/current/userguide/java_plugin.html#lifecycle_tasks
-
-[jb:github]: https://github.com/JetBrains/.github/blob/main/profile/README.md
-
-[jb:forum]: https://platform.jetbrains.com/
-
-[jb:quality-guidelines]: https://plugins.jetbrains.com/docs/marketplace/quality-guidelines.html
-
-[jb:paid-plugins]: https://plugins.jetbrains.com/docs/marketplace/paid-plugins-marketplace.html
-
-[jb:quality-guidelines]: https://plugins.jetbrains.com/docs/marketplace/quality-guidelines.html
-
-[jb:ipe]: https://jb.gg/ipe
-
-[jb:ui-guidelines]: https://jetbrains.github.io/ui
+MIT License — see [LICENSE](LICENSE) for details.
