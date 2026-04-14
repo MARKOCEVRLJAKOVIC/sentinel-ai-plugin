@@ -18,8 +18,8 @@ class AiResultDialog(
 
     init {
         title = "SentinelAI — AI Scan Results"
-        setCancelButtonText("Cancel Push (Fix Issues)")
-        setOKButtonText("Push Anyway")
+        setCancelButtonText("Close")
+        setOKButtonText("Acknowledge & Continue")
         init()
     }
 

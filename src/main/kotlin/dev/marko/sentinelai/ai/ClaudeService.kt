@@ -49,10 +49,10 @@ object ClaudeService {
             )
         }
 
-        val highRiskFiles = files.filter { it.riskLevel >= RiskLevel.HIGH }
+        val highRiskFiles = files.filter { it.riskLevel >= RiskLevel.MEDIUM }
 
         if (highRiskFiles.isEmpty()) {
-            LOG.info("SentinelAI: No HIGH/CRITICAL files — skipping Level 2 scan")
+            LOG.info("SentinelAI: No MEDIUM+ files — skipping Level 2 scan")
             return CompletableFuture.completedFuture(AiScanResult.NoHighRiskFiles)
         }
 

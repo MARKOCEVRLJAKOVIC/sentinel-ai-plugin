@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.util.concurrent.CompletableFuture
 
-// ── AI Finding (Level 2 output) ─────────────────────────────────────────
+// AI Finding (Level 2 output)
 
 @Serializable
 data class AiFinding(
@@ -35,7 +35,7 @@ sealed class AiScanResult {
     /** AI unreachable or HTTP error */
     data class ConnectionError(val message: String) : AiScanResult()
 
-    /** No HIGH/CRITICAL files were in the diff — nothing to analyse */
+    /** No MEDIUM+ files were in the diff — nothing to analyse */
     object NoHighRiskFiles : AiScanResult()
 
     val hasCriticalFindings: Boolean
