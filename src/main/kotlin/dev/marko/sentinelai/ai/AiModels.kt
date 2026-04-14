@@ -1,4 +1,4 @@
-package dev.marko.sentinelai
+package dev.marko.sentinelai.ai
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

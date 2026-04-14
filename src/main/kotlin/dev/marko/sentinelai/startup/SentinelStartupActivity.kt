@@ -1,8 +1,16 @@
-package dev.marko.sentinelai
+package dev.marko.sentinelai.startup
 
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
+import com.intellij.openapi.ui.Messages
+import dev.marko.sentinelai.push.SentinelPushHandler
+import dev.marko.sentinelai.ai.ClaudeClient
+import dev.marko.sentinelai.config.SentinelConfig
+import dev.marko.sentinelai.state.SentinelState
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryChangeListener
 
@@ -65,7 +73,7 @@ class SentinelGitPushListener : GitRepositoryChangeListener {
         val project = repository.project
         val state = SentinelState.getInstance(project)
         if (state.hasPending) {
-            com.intellij.openapi.application.ApplicationManager.getApplication()
+            ApplicationManager.getApplication()
                 .invokeLater {
                     SentinelPushHandler(project).checkBeforePush()
                 }
@@ -83,17 +91,17 @@ class SentinelGitPushListener : GitRepositoryChangeListener {
  *
  * Register this in plugin.xml under <actions> if desired.
  */
-class SentinelPushStatusAction : com.intellij.openapi.actionSystem.AnAction(
+class SentinelPushStatusAction : AnAction(
     "SentinelAI Check",
     "Check AI scan result before pushing",
     null  // Add an icon here via IconLoader.getIcon() for production
 ) {
-    override fun actionPerformed(e: com.intellij.openapi.actionSystem.AnActionEvent) {
+    override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         val handler = SentinelPushHandler(project)
         val allowed = handler.checkBeforePush()
         if (allowed) {
-            com.intellij.openapi.ui.Messages.showInfoMessage(
+            Messages.showInfoMessage(
                 project,
                 "SentinelAI: No blocking issues found. Safe to push.",
                 "SentinelAI — All Clear"
@@ -101,7 +109,7 @@ class SentinelPushStatusAction : com.intellij.openapi.actionSystem.AnAction(
         }
     }
 
-    override fun update(e: com.intellij.openapi.actionSystem.AnActionEvent) {
+    override fun update(e: AnActionEvent) {
         val project = e.project ?: run { e.presentation.isEnabled = false; return }
         val hasPending = SentinelState.getInstance(project).hasPending
         e.presentation.text = if (hasPending) "SentinelAI (scanning…)" else "SentinelAI"

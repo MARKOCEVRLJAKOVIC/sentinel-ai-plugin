@@ -1,4 +1,4 @@
-package dev.marko.sentinelai
+package dev.marko.sentinelai.ui
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType

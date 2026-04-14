@@ -1,4 +1,4 @@
-package dev.marko.sentinelai
+package dev.marko.sentinelai.ai
 
 import com.intellij.openapi.diagnostic.Logger
 import kotlinx.serialization.json.*

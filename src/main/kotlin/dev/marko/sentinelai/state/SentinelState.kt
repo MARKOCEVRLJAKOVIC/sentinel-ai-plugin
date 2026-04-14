@@ -1,9 +1,10 @@
-package dev.marko.sentinelai
+package dev.marko.sentinelai.state
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import java.util.concurrent.atomic.AtomicReference
+import com.jetbrains.rd.util.AtomicReference
+import dev.marko.sentinelai.ai.PendingAnalysis
 
 /**
  * Project-level service that bridges [SentinelCheckinHandler] (commit time)
@@ -14,7 +15,7 @@ import java.util.concurrent.atomic.AtomicReference
  *  2. PushHandler reads & clears it before each push
  *
  * Registered in plugin.xml as:
- *  <projectService serviceImplementation="dev.marko.sentinelai.SentinelState"/>
+ *  <projectService serviceImplementation="dev.marko.sentinelai.state.SentinelState"/>
  */
 @Service(Service.Level.PROJECT)
 class SentinelState {

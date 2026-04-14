@@ -1,4 +1,4 @@
-package dev.marko.sentinelai
+package dev.marko.sentinelai.scan
 
 data class ScanFinding(
     val file: String,

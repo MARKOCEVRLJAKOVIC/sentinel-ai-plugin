@@ -1,7 +1,9 @@
-package dev.marko.sentinelai
+package dev.marko.sentinelai.ai
 
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.vfs.VirtualFile
+import dev.marko.sentinelai.scan.RiskLevel
+import dev.marko.sentinelai.scan.RiskMapEngine
 import kotlinx.serialization.json.Json
 
 private val LOG = Logger.getInstance("SentinelAI.PromptEngine")

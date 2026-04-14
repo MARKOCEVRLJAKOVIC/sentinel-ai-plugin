@@ -1,9 +1,19 @@
-package dev.marko.sentinelai
+package dev.marko.sentinelai.push
 
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
+import dev.marko.sentinelai.ai.AiFinding
+import dev.marko.sentinelai.ai.AiScanResult
+import dev.marko.sentinelai.ai.PendingAnalysis
+import dev.marko.sentinelai.config.SentinelConfig
+import dev.marko.sentinelai.config.TimeoutBehavior
+import dev.marko.sentinelai.state.SentinelState
+import dev.marko.sentinelai.ui.AiResultDialog
+import dev.marko.sentinelai.ui.SentinelWaitDialog
+import dev.marko.sentinelai.ui.showConnectionErrorNotification
+import dev.marko.sentinelai.ui.showTimeoutNotification
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
@@ -141,5 +151,3 @@ class SentinelPushHandler(private val project: Project) {
         )
     }
 }
-
-enum class TimeoutBehavior { WARN, BLOCK, ALLOW }

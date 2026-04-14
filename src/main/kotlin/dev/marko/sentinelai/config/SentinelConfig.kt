@@ -1,4 +1,4 @@
-package dev.marko.sentinelai
+package dev.marko.sentinelai.config
 
 import com.intellij.openapi.diagnostic.Logger
 import org.yaml.snakeyaml.Yaml
@@ -121,3 +121,5 @@ data class CustomPattern(
     val description: String,
     val keywords: List<String>
 )
+
+enum class TimeoutBehavior { WARN, BLOCK, ALLOW }

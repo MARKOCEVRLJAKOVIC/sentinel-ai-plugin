@@ -29,15 +29,15 @@
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
         <vcsCheckinHandlerFactory
-                implementation="dev.marko.sentinelai.SentinelCheckinHandlerFactory"/>
+                implementation="dev.marko.sentinelai.push.SentinelCheckinHandlerFactory"/>
         <postStartupActivity
-                implementation="dev.marko.sentinelai.SentinelStartupActivity"/>
+                implementation="dev.marko.sentinelai.startup.SentinelStartupActivity"/>
 
         <notificationGroup id="SentinelAI"
                            displayType="BALLOON"
                            isLogByDefault="true" />
 
-        <projectService serviceImplementation="dev.marko.sentinelai.SentinelState"/>
+        <projectService serviceImplementation="dev.marko.sentinelai.state.SentinelState"/>
 
 
     </extensions>
@@ -51,7 +51,7 @@
             before each push completes.
         -->
         <listener
-                class="dev.marko.sentinelai.SentinelGitPushListener"
+                class="dev.marko.sentinelai.startup.SentinelGitPushListener"
                 topic="git4idea.repo.GitRepositoryChangeListener"/>
     </applicationListeners>
 

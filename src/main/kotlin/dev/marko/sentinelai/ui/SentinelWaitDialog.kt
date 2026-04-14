@@ -1,9 +1,10 @@
-package dev.marko.sentinelai
+package dev.marko.sentinelai.ui
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
+import dev.marko.sentinelai.ai.AiScanResult
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Font

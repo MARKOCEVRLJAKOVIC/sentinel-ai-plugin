@@ -1,7 +1,16 @@
-package dev.marko.sentinelai
+package dev.marko.sentinelai.push
 
 import com.intellij.openapi.vcs.CheckinProjectPanel
 import com.intellij.openapi.vcs.checkin.CheckinHandler
+import dev.marko.sentinelai.ai.ClaudeService
+import dev.marko.sentinelai.ai.PendingAnalysis
+import dev.marko.sentinelai.ai.toFileWithContent
+import dev.marko.sentinelai.config.SentinelConfig
+import dev.marko.sentinelai.scan.Level1Scanner
+import dev.marko.sentinelai.scan.RiskLevel
+import dev.marko.sentinelai.scan.ScanFinding
+import dev.marko.sentinelai.state.SentinelState
+import dev.marko.sentinelai.ui.SentinelBlockDialog
 
 /**
  * Level 1 (sync) + Level 2 trigger (async).

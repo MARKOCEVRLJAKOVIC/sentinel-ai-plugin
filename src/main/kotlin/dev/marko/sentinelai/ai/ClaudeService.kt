@@ -1,6 +1,8 @@
-package dev.marko.sentinelai
+package dev.marko.sentinelai.ai
 
 import com.intellij.openapi.diagnostic.Logger
+import dev.marko.sentinelai.config.SentinelConfig
+import dev.marko.sentinelai.scan.RiskLevel
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 
