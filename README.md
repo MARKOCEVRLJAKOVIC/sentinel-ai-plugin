@@ -9,6 +9,8 @@
 
 SentinelAI is an open-source IntelliJ IDEA plugin that acts as an automated security checkpoint between your code and your remote repository. It intercepts Git commits and pushes to detect hardcoded secrets, API keys, system prompts, PII, and credentials — before they ever leave your machine.
 
+![Demonstration](img/gif.gif)
+
 ---
 
 ## Inspiration
