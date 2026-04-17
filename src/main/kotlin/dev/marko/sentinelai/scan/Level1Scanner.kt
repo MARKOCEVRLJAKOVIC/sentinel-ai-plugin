@@ -13,6 +13,7 @@ object Level1Scanner {
 
     private val PATTERNS = listOf(
 
+        // Generic credential assignments
         Pattern(
             Regex("""(?i)(api_?key|apikey|api-key)\s*[:=]\s*["']?(?!.*(\$\{|getenv|placeholder|example|todo|mock|your-))[a-zA-Z0-9\-_]{16,}["']?"""),
             "Hardcoded API key detected"
@@ -30,6 +31,7 @@ object Level1Scanner {
             "Hardcoded token detected"
         ),
 
+        // Well-known service key formats
         Pattern(
             Regex("""sk-[a-zA-Z0-9]{20,}"""),
             "OpenAI API key detected"
@@ -63,14 +65,22 @@ object Level1Scanner {
             "AWS Secret Access Key detected"
         ),
 
+        // JSON / YAML style key-value secrets
         Pattern(
             Regex("""(?i)["']?(api_?key|password|secret|token)["']?\s*:\s*["'](?!.*(\$\{|getenv|placeholder|example|todo|mock|your-))[a-zA-Z0-9\-_]{8,}["']"""),
             "Hardcoded secret in JSON/YAML value"
         ),
 
+        // Credentials embedded in connection strings / URLs
         Pattern(
             Regex("""(?i)jdbc:[a-z]+://[^:@\s]+:[^@\s]{3,}@[^\s]+"""),
             "JDBC connection string with credentials"
+        ),
+        Pattern(
+            // Matches any scheme://user:pass@host — handles @ inside passwords
+            // via backtracking: \S+:\S+ will backtrack to the first colon.
+            Regex("""(?i)[a-z][a-z0-9+\-.]*://\S+:\S+@\S+"""),
+            "Credentials embedded in URL"
         ),
         Pattern(
             Regex("""(?i)[?&](password|passwd|pwd)=[^&\s"']{3,}"""),
@@ -81,6 +91,7 @@ object Level1Scanner {
             "Credentials in URL query parameters"
         ),
 
+        // Private keys and certificates
         Pattern(
             Regex("""-----BEGIN [A-Z ]*PRIVATE KEY-----"""),
             "Private key detected"
@@ -90,8 +101,10 @@ object Level1Scanner {
             "Certificate embedded in source"
         ),
 
+        // High-entropy variable assignments
+        // Handles simple `val foo`, multi-word `const val FOO`, `private val bar`, etc.
         Pattern(
-            Regex("""(?<![/\w])(val|var|const|private|public|static|final)\s+\w+\s*[:=]+\s*["'][a-zA-Z0-9+/=\-_]{32,}["']"""),
+            Regex("""(?<![/\w])(val|var|const|private|public|static|final)(\s+\w+)+\s*[:=]+\s*["'][a-zA-Z0-9+/=\-_]{32,}["']"""),
             "High-entropy string assigned to variable (possible hardcoded secret)"
         )
     )
@@ -133,7 +146,10 @@ object Level1Scanner {
                 lower.contains("your-api-key")  ||
                 lower.contains("placeholder")   ||
                 lower.contains("todo")          ||
-                lower.contains("example")       ||
+                // Only treat "example" as a safe placeholder when it appears right
+                // after a delimiter (quote, equals, colon) — NOT when it is embedded
+                // inside a token value such as AKIAIOSFODNN7EXAMPLE or api.example.com
+                Regex("""[=:"']\s*example""").containsMatchIn(lower) ||
                 lower.contains("mock")          ||
                 lower.contains("<your")         ||
                 lower.contains("test-")         ||

@@ -17,6 +17,10 @@ repositories {
 
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("io.mockk:mockk:1.13.13")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     intellijPlatform {
         intellijIdea("2025.2.4")
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
